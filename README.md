@@ -162,11 +162,11 @@ compose.yaml
 
 **Jednotný formát chyb.** Jeden listener převádí všechny výjimky pod `/api` na stejný JSON. 422 znamená neplatná pole, 400 nečitelný požadavek. Zvažoval jsem RFC 9457 (Problem Details). Vlastní tvar je pro frontend jednodušší, protože `fields` jde rovnou navázat na formulář. Přechod na RFC 9457 by byl jen změna listeneru.
 
-**Řazení: priorita, pak poslední změna.** Nejdůležitější a nejčerstvější poznámky jsou nahoře. Priorita je v DB jako čitelný text (`high`), abecední řazení by tedy bylo špatně. Repozitář proto řadí přes `CASE` sestavený z enumu, pořadí je definované na jednom místě (`Priority::sortRank()`). Při shodě rozhoduje `id`, aby pořadí bylo stabilní. Index `(priority, updated_at)` pokrývá filtrovaný dotaz. Uložení beze změny neposouvá `updatedAt`, takže poznámka zbytečně neskočí nahoru.
+**Řazení: priorita, pak poslední změna.** Nejdůležitější a nejčerstvější poznámky jsou nahoře. Priorita je v DB jako čitelný text (`high`), abecední řazení by tedy bylo špatně. Repozitář proto řadí přes `CASE` sestavený z enumu, pořadí je definované na jednom místě (`Priority::sortRank()`). Při shodě rozhoduje `id`, aby pořadí bylo stabilní. U filtrovaného seznamu je priorita stejná, `CASE` se vynechá a index `(priority, updated_at)` obslouží filtr i řazení bez třídění v paměti (ověřeno přes `EXPLAIN`). Uložení beze změny neposouvá `updatedAt`, takže poznámka zbytečně neskočí nahoru.
 
 **Čas přes Clock.** Služba bere čas z `ClockInterface`, ne z `new DateTime()`. V testech je čas pevný, takže testy řazení jsou deterministické. V DB je všechno v UTC, API vrací ISO 8601 s posunem a prohlížeč zobrazí místní čas.
 
-**Docker.** Tři služby: `db` (MariaDB), `php` (PHP-FPM) a `web` (nginx). Nginx servíruje sestavený frontend a `/api` posílá do PHP. UI i API jsou na stejné adrese, takže není potřeba CORS. Obrazy jsou vícestupňové: Node je jen v build stupni. PHP image má cíl `dev` (s dev závislostmi, aby šly pustit testy přímo v kontejneru) a `prod` (bez nich, optimalizovaný autoloader); CI sestavuje oba. Aplikace v kontejneru neběží pod rootem. Migrace se spouští v entrypointu PHP kontejneru; při více instancích by to byl samostatný krok nasazení. Dvě úpravy MariaDB: healthcheck se přihlašuje aplikačním uživatelem přes TCP (projde až po dokončení inicializace) a TLS je na interní síti vypnuté (`--skip-ssl`), protože certifikát generovaný při startu občas shodil první inicializaci.
+**Docker.** Tři služby: `db` (MariaDB), `php` (PHP-FPM) a `web` (nginx). Nginx servíruje sestavený frontend a `/api` posílá do PHP. UI i API jsou na stejné adrese, takže není potřeba CORS. Obrazy jsou vícestupňové: Node je jen v build stupni. PHP image má cíl `dev` (s dev závislostmi, aby šly pustit testy přímo v kontejneru) a `prod` (bez nich, optimalizovaný autoloader); CI sestavuje oba. Aplikace v kontejneru neběží pod rootem; produkční obraz bez `APP_SECRET` odmítne nastartovat. Nginx překládá adresu PHP kontejneru při každém požadavku, takže restart PHP nerozbije API. Služby mají healthchecky a startují ve správném pořadí: web čeká na PHP, PHP na databázi. Nginx posílá bezpečnostní hlavičky včetně Content-Security-Policy. Migrace se spouští v entrypointu PHP kontejneru; při více instancích by to byl samostatný krok nasazení. Dvě úpravy MariaDB: healthcheck se přihlašuje aplikačním uživatelem přes TCP (projde až po dokončení inicializace) a TLS je na interní síti vypnuté (`--skip-ssl`), protože certifikát generovaný při startu občas shodil první inicializaci.
 
 **Testy.** Funkční testy volají API přes HTTP kernel proti skutečné MariaDB, ne proti SQLite, aby testovaly stejné SQL jako produkce. Každý test běží v transakci, která se na konci vrátí (DAMA DoctrineTestBundle), takže jsou rychlé a nezávislé. Testy pokrývají řazení, filtr, validaci, chyby a 404. PHPStan běží na nejvyšší úrovni včetně rozšíření pro Symfony a Doctrine. CI spouští stejný Compose stack jako lokálně.
 
@@ -188,7 +188,8 @@ compose.yaml
 - **Výpadek API nebo sítě:** chybový stav s tlačítkem „Zkusit znovu“. Odpověď, která není náš JSON (třeba 502 z nginx při startu PHP), dostane obecnou hlášku.
 - **HTML v obsahu:** Vue text vždy escapuje, `v-html` se nepoužívá, takže XSS přes obsah poznámky nejde.
 - **Dvojí odeslání formuláře:** tlačítko je během ukládání zablokované.
-- **Opakovaný start kontejneru:** demo data se nahrají jen do prázdné databáze.
+- **Opakovaný start kontejneru:** demo data se nahrají jen do prázdné databáze. Když smažete všechny poznámky a restartujete stack, demo data se vrátí; vypnout to jde přes `LOAD_DEMO_DATA: "0"` v `compose.yaml`.
+- **Smazání během načítání seznamu:** seznam se po smazání načte znovu, takže starší odpověď nevrátí smazanou poznámku zpět.
 
 ## Další vývoj
 
