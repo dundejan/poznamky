@@ -40,6 +40,6 @@ COPY --chown=www-data:www-data backend/composer.json backend/composer.lock backe
 RUN composer install --no-interaction --no-scripts --no-autoloader --prefer-dist --no-dev
 
 COPY --chown=www-data:www-data backend/ ./
+# Configuration (APP_SECRET, DATABASE_URL) comes from real environment variables at runtime.
 RUN composer dump-autoload --no-dev --classmap-authoritative \
-    && composer dump-env prod \
-    && bin/console cache:warmup
+    && APP_SECRET=build-only bin/console cache:warmup

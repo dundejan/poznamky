@@ -3,6 +3,7 @@ name: poznamky
 services:
   db:
     image: mariadb:12.3
+    restart: unless-stopped
     environment:
       MARIADB_DATABASE: notes
       MARIADB_USER: notes
@@ -31,9 +32,17 @@ services:
     environment:
       DATABASE_URL: mysql://notes:notes@db:3306/notes?serverVersion=12.3.3-MariaDB&charset=utf8mb4
       LOAD_DEMO_DATA: "1"
+    restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      # FPM accepts connections only after the entrypoint has finished migrations.
+      test: ["CMD", "php", "-r", "exit(@fsockopen('127.0.0.1', 9000) ? 0 : 1);"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
 
   web:
     build:
@@ -41,8 +50,10 @@ services:
       dockerfile: docker/web/Dockerfile
     ports:
       - "${APP_PORT:-8080}:80"
+    restart: unless-stopped
     depends_on:
-      - php
+      php:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/api/notes"]
       interval: 5s

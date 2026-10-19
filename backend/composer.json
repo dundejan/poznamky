@@ -75,7 +75,10 @@
             "@test:prepare",
             "@php bin/phpunit"
         ],
-        "phpstan": "phpstan analyse --memory-limit=1G",
+        "phpstan": [
+            "@php bin/console cache:warmup --env=dev --quiet",
+            "phpstan analyse --memory-limit=1G"
+        ],
         "cs": "php-cs-fixer fix --dry-run --diff",
         "cs:fix": "php-cs-fixer fix",
         "check": [
