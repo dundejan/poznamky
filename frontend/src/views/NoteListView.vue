@@ -61,8 +61,13 @@ async function remove(note: Note): Promise<void> {
   } finally {
     deletingId.value = null
   }
-  notes.value = notes.value.filter((item) => item.id !== note.id)
   flash.value = 'Poznámka byla smazána.'
+  // A list request started before the delete could still bring the note back; reload instead.
+  if (status.value === 'loading') {
+    void load()
+  } else {
+    notes.value = notes.value.filter((item) => item.id !== note.id)
+  }
 }
 
 watch(priority, load, { immediate: true })

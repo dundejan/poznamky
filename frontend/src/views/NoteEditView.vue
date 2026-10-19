@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { ref, watch } from 'vue'
 import { ApiError, getNote, updateNote, type Note } from '@/api/notes'
 import NoteForm from '@/components/NoteForm.vue'
 import { useNoteSave } from '@/composables/useNoteSave'
@@ -31,7 +31,8 @@ async function load(): Promise<void> {
   }
 }
 
-onMounted(load)
+// The router reuses this view when only the id changes, so reload on every change.
+watch(() => props.id, load, { immediate: true })
 </script>
 
 <template>
@@ -87,6 +88,7 @@ onMounted(load)
     </p>
 
     <NoteForm
+      :key="note.id"
       :initial="{ title: note.title, content: note.content, priority: note.priority }"
       submit-label="Uložit změny"
       :submitting="submitting"
