@@ -221,6 +221,40 @@ final class NoteApiTest extends WebTestCase
         self::assertResponseStatusCodeSame(404);
     }
 
+    public function testUpdateWithOnlyWhitespaceAroundTitleKeepsTimestamp(): void
+    {
+        $id = $this->createNote('Same', 'low');
+        self::mockTime('+10 minutes');
+
+        $this->request('PUT', "/api/notes/$id", ['title' => '  Same  ', 'priority' => 'low']);
+
+        self::assertResponseIsSuccessful();
+        self::assertSame('2026-10-01T12:00:00+00:00', $this->note()['updatedAt']);
+    }
+
+    public function testDeleteReturns404ForMissingNote(): void
+    {
+        $this->request('DELETE', '/api/notes/999999');
+
+        self::assertResponseStatusCodeSame(404);
+    }
+
+    public function testCreateRejectsJsonThatIsNotAnObject(): void
+    {
+        $this->client->request('POST', '/api/notes', server: ['CONTENT_TYPE' => 'application/json'], content: '"just a string"');
+
+        self::assertResponseStatusCodeSame(422);
+        self::assertArrayHasKey('title', $this->error()['fields'] ?? []);
+    }
+
+    public function testCreateRejectsEmptyBody(): void
+    {
+        $this->client->request('POST', '/api/notes', server: ['CONTENT_TYPE' => 'application/json'], content: '');
+
+        self::assertResponseStatusCodeSame(400);
+        self::assertSame('invalid_json', $this->error()['code']);
+    }
+
     public function testPatchIsNotSupported(): void
     {
         $id = $this->createNote('A', 'low');
