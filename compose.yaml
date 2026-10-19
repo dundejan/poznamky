@@ -1,0 +1,53 @@
+name: poznamky
+
+services:
+  db:
+    image: mariadb:12.3
+    environment:
+      MARIADB_DATABASE: notes
+      MARIADB_USER: notes
+      MARIADB_PASSWORD: notes
+      MARIADB_RANDOM_ROOT_PASSWORD: "1"
+    # TLS is off on the private Compose network. The self-signed certificate MariaDB
+    # generates at startup made the first initialization fail now and then.
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci", "--skip-ssl"]
+    volumes:
+      - db-data:/var/lib/mysql
+      - ./docker/mariadb/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      # Logs in as the app user over TCP, which only works once initialization has finished.
+      # (The image's healthcheck.sh user failed to log in now and then.)
+      test: ["CMD-SHELL", "mariadb --skip-ssl -h 127.0.0.1 -u\"$$MARIADB_USER\" -p\"$$MARIADB_PASSWORD\" -e 'SELECT 1' \"$$MARIADB_DATABASE\" > /dev/null"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+  php:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+      target: dev
+    environment:
+      DATABASE_URL: mysql://notes:notes@db:3306/notes?serverVersion=12.3.3-MariaDB&charset=utf8mb4
+      LOAD_DEMO_DATA: "1"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/web/Dockerfile
+    ports:
+      - "${APP_PORT:-8080}:80"
+    depends_on:
+      - php
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/api/notes"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  db-data:

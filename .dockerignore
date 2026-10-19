@@ -1,0 +1,8 @@
+.git
+**/node_modules
+**/dist
+backend/vendor
+backend/var
+backend/.env.local
+backend/.phpunit.cache
+backend/.php-cs-fixer.cache
