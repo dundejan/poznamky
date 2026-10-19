@@ -4,7 +4,7 @@ export function formatDateTime(iso: string): string {
   return dateTime.format(new Date(iso))
 }
 
-/** 1 poznámka, 2–4 poznámky, 5+ poznámek. */
+/** 1 poznámka, 2 až 4 poznámky, 5 a více poznámek. */
 export function pluralizeNotes(count: number): string {
   if (count === 1) return '1 poznámka'
   if (count >= 2 && count <= 4) return `${count} poznámky`
