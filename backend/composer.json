@@ -4,7 +4,7 @@
     "minimum-stability": "stable",
     "prefer-stable": true,
     "require": {
-        "php": ">=8.2",
+        "php": ">=8.5",
         "ext-ctype": "*",
         "ext-iconv": "*",
         "doctrine/doctrine-bundle": "^3.3",
@@ -66,6 +66,22 @@
         ],
         "post-update-cmd": [
             "@auto-scripts"
+        ],
+        "test:prepare": [
+            "@php bin/console doctrine:database:create --env=test --if-not-exists --no-interaction",
+            "@php bin/console doctrine:migrations:migrate --env=test --no-interaction --allow-no-migration"
+        ],
+        "test": [
+            "@test:prepare",
+            "@php bin/phpunit"
+        ],
+        "phpstan": "phpstan analyse --memory-limit=1G",
+        "cs": "php-cs-fixer fix --dry-run --diff",
+        "cs:fix": "php-cs-fixer fix",
+        "check": [
+            "@cs",
+            "@phpstan",
+            "@test"
         ]
     },
     "conflict": {
@@ -88,5 +104,9 @@
         "phpunit/phpunit": "^13.4",
         "symfony/browser-kit": "7.4.*",
         "symfony/css-selector": "7.4.*"
+    },
+    "scripts-descriptions": {
+        "test": "Prepares the test database and runs PHPUnit.",
+        "check": "Runs coding style check, PHPStan and tests (same as CI)."
     }
 }

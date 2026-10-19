@@ -7,9 +7,9 @@ when@dev:
         handlers:
             main:
                 type: stream
-                path: "%kernel.logs_dir%/%kernel.environment%.log"
-                level: debug
-                channels: ["!event"]
+                path: php://stderr
+                level: info
+                channels: ["!event", "!deprecation"]
             console:
                 type: console
                 process_psr_3_messages: false
