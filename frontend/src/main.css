@@ -1,0 +1,383 @@
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --text: #1f2933;
+  --muted: #5f6b7a;
+  --border: #dde2e8;
+  --accent: #0f766e;
+  --accent-hover: #0b5f58;
+  --danger: #b42318;
+  --danger-bg: #fef3f2;
+  --success-bg: #ecfdf3;
+  --success: #067647;
+  --focus: #2563eb;
+
+  --high-bg: #fde8e8;
+  --high-text: #9b1c1c;
+  --medium-bg: #fef3c7;
+  --medium-text: #92400e;
+  --low-bg: #e5edf6;
+  --low-text: #334e68;
+
+  --radius: 10px;
+  color-scheme: light;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+}
+
+h1 {
+  font-size: 1.5rem;
+  margin: 0 0 1rem;
+}
+
+a {
+  color: var(--accent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.container {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+main.container {
+  padding-top: 24px;
+  padding-bottom: 48px;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Header */
+.app-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.app-header__inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 60px;
+}
+
+.app-header__brand {
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: var(--text);
+  text-decoration: none;
+}
+
+/* Buttons */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.button:hover {
+  border-color: #c3cad3;
+  background: #f0f2f5;
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.button--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.button--primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.button--danger {
+  color: var(--danger);
+}
+
+.button--danger:hover {
+  background: var(--danger-bg);
+  border-color: #f4c7c3;
+}
+
+.button--small {
+  padding: 4px 10px;
+  font-size: 0.875rem;
+}
+
+/* Cards and states */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+}
+
+.state {
+  text-align: center;
+  padding: 32px 20px;
+}
+
+.state p {
+  margin: 0 0 16px;
+}
+
+.alert {
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 0 0 16px;
+}
+
+.alert--error {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.alert--success {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+/* List */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.toolbar h1 {
+  margin: 0;
+}
+
+.note-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.note-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.note-card__title {
+  font-size: 1.05rem;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.note-card__title a {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.note-card__title a:hover {
+  text-decoration: underline;
+}
+
+.note-card__content {
+  margin: 8px 0 0;
+  color: var(--muted);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+
+.note-card__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.note-card__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.badge {
+  flex-shrink: 0;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.badge--high {
+  background: var(--high-bg);
+  color: var(--high-text);
+}
+
+.badge--medium {
+  background: var(--medium-bg);
+  color: var(--medium-text);
+}
+
+.badge--low {
+  background: var(--low-bg);
+  color: var(--low-text);
+}
+
+/* Segmented control (filter and priority picker) */
+.segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.segmented__item {
+  padding: 6px 14px;
+  border: 0;
+  border-right: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.segmented__item:last-child {
+  border-right: 0;
+}
+
+.segmented__item:hover {
+  background: #f0f2f5;
+}
+
+.segmented__item[aria-pressed='true'],
+.segmented__item.is-selected {
+  background: var(--accent);
+  color: #fff;
+}
+
+.segmented__item:has(input:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+/* Form */
+.form {
+  display: grid;
+  gap: 18px;
+  padding: 20px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.field__label {
+  font-weight: 600;
+  padding: 0;
+}
+
+.field .segmented {
+  justify-self: start;
+}
+
+.input {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+}
+
+.input[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 160px;
+}
+
+.field__hint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-align: right;
+}
+
+.field__hint.is-over {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.field__error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.875rem;
+}
+
+.form__actions {
+  display: flex;
+  gap: 8px;
+}
