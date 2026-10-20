@@ -3,8 +3,7 @@ import { computed, nextTick, reactive, useTemplateRef, watch } from 'vue'
 import { PRIORITIES, type FieldErrors, type NoteInput } from '@/api/notes'
 import { PRIORITY_LABELS } from '@/priority'
 
-// Mirror the backend limits (Note::TITLE_MAX_LENGTH, Note::CONTENT_MAX_LENGTH); the API validates.
-const TITLE_MAX = 200
+// Mirrors Note::CONTENT_MAX_LENGTH; the API validates.
 const CONTENT_MAX = 10_000
 
 const props = defineProps<{
@@ -58,7 +57,6 @@ watch(
         class="input"
         autocomplete="off"
         required
-        :maxlength="TITLE_MAX"
         :aria-invalid="!!fieldError('title')"
         :aria-describedby="fieldError('title') ? 'note-title-error' : undefined"
       >
