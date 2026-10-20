@@ -36,6 +36,7 @@ defineEmits<{ delete: [note: Note] }>()
         <RouterLink
           :to="{ name: 'note-edit', params: { id: note.id } }"
           class="button button--small"
+          :aria-label="`Upravit poznámku ${note.title}`"
         >
           Upravit
         </RouterLink>
@@ -43,6 +44,7 @@ defineEmits<{ delete: [note: Note] }>()
           type="button"
           class="button button--small button--danger"
           :disabled="deleting"
+          :aria-label="`Smazat poznámku ${note.title}`"
           @click="$emit('delete', note)"
         >
           {{ deleting ? 'Mažu…' : 'Smazat' }}

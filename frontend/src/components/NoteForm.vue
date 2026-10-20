@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, reactive } from 'vue'
+import { computed, nextTick, reactive, useTemplateRef, watch } from 'vue'
 import { PRIORITIES, type FieldErrors, type NoteInput } from '@/api/notes'
 import { PRIORITY_LABELS } from '@/priority'
 
-// Mirrors the backend limit so the counter can warn early; the API stays the source of truth.
+// Mirror the backend limits (Note::TITLE_MAX_LENGTH, Note::CONTENT_MAX_LENGTH); the API validates.
+const TITLE_MAX = 200
 const CONTENT_MAX = 10_000
 
 const props = defineProps<{
@@ -16,17 +17,31 @@ const props = defineProps<{
 const emit = defineEmits<{ submit: [input: NoteInput] }>()
 
 const form = reactive<NoteInput>({ ...props.initial })
+const formEl = useTemplateRef<HTMLFormElement>('formEl')
 
-// Counts characters the way the API does (code points, not UTF-16 units).
+// Code points, as the API counts them.
 const contentLength = computed(() => [...form.content].length)
 
 function fieldError(field: keyof NoteInput): string | undefined {
   return props.errors[field]?.[0]
 }
+
+// Move focus to the first invalid field.
+watch(
+  () => props.errors,
+  async (errors) => {
+    const field = (['title', 'priority', 'content'] as const).find((name) => errors[name])
+    if (!field) return
+    await nextTick()
+    const selector = field === 'priority' ? 'input[name="priority"]' : `#note-${field}`
+    formEl.value?.querySelector<HTMLElement>(selector)?.focus()
+  },
+)
 </script>
 
 <template>
   <form
+    ref="formEl"
     class="card form"
     novalidate
     @submit.prevent="emit('submit', { ...form })"
@@ -42,8 +57,10 @@ function fieldError(field: keyof NoteInput): string | undefined {
         type="text"
         class="input"
         autocomplete="off"
+        required
+        :maxlength="TITLE_MAX"
         :aria-invalid="!!fieldError('title')"
-        aria-describedby="note-title-error"
+        :aria-describedby="fieldError('title') ? 'note-title-error' : undefined"
       >
       <p
         v-if="fieldError('title')"
@@ -54,7 +71,10 @@ function fieldError(field: keyof NoteInput): string | undefined {
       </p>
     </div>
 
-    <fieldset class="field">
+    <fieldset
+      class="field"
+      :aria-describedby="fieldError('priority') ? 'note-priority-error' : undefined"
+    >
       <legend class="field__label">
         Priorita
       </legend>
@@ -63,7 +83,6 @@ function fieldError(field: keyof NoteInput): string | undefined {
           v-for="priority in PRIORITIES"
           :key="priority"
           class="segmented__item"
-          :class="{ 'is-selected': form.priority === priority }"
         >
           <input
             v-model="form.priority"
@@ -77,6 +96,7 @@ function fieldError(field: keyof NoteInput): string | undefined {
       </div>
       <p
         v-if="fieldError('priority')"
+        id="note-priority-error"
         class="field__error"
       >
         {{ fieldError('priority') }}
@@ -94,7 +114,7 @@ function fieldError(field: keyof NoteInput): string | undefined {
         class="input textarea"
         rows="8"
         :aria-invalid="!!fieldError('content')"
-        aria-describedby="note-content-hint note-content-error"
+        :aria-describedby="fieldError('content') ? 'note-content-hint note-content-error' : 'note-content-hint'"
       />
       <p
         id="note-content-hint"

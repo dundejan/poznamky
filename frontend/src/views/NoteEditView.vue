@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { ApiError, getNote, updateNote, type Note } from '@/api/notes'
+import { ApiError, errorMessage, getNote, updateNote, type Note } from '@/api/notes'
 import NoteForm from '@/components/NoteForm.vue'
 import { useNoteSave } from '@/composables/useNoteSave'
-import { errorMessage, formatDateTime } from '@/format'
+import { formatDateTime } from '@/format'
 
 const props = defineProps<{ id: number }>()
 
@@ -16,12 +16,13 @@ const { submitting, fieldErrors, formError, submit } = useNoteSave(
   'Změny byly uloženy.',
 )
 
-async function load(): Promise<void> {
+async function load(id: number, signal?: AbortSignal): Promise<void> {
   status.value = 'loading'
   try {
-    note.value = await getNote(props.id)
+    note.value = await getNote(id, signal)
     status.value = 'ready'
   } catch (error) {
+    if (signal?.aborted) return
     if (error instanceof ApiError && error.status === 404) {
       status.value = 'not-found'
     } else {
@@ -31,8 +32,16 @@ async function load(): Promise<void> {
   }
 }
 
-// The router reuses this view when only the id changes, so reload on every change.
-watch(() => props.id, load, { immediate: true })
+// The router reuses this view when only the id changes.
+watch(
+  () => props.id,
+  (id, _previous, onCleanup) => {
+    const controller = new AbortController()
+    onCleanup(() => controller.abort())
+    void load(id, controller.signal)
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
@@ -50,7 +59,7 @@ watch(() => props.id, load, { immediate: true })
     v-else-if="status === 'not-found'"
     class="card state"
   >
-    <p>Tahle poznámka neexistuje. Možná byla smazána.</p>
+    <p>Tato poznámka neexistuje, možná byla smazána.</p>
     <RouterLink
       :to="{ name: 'notes' }"
       class="button"
@@ -64,11 +73,11 @@ watch(() => props.id, load, { immediate: true })
     class="card state"
     role="alert"
   >
-    <p>{{ loadError }}</p>
+    <p>Poznámku se nepodařilo načíst. {{ loadError }}</p>
     <button
       type="button"
       class="button"
-      @click="load"
+      @click="load(id)"
     >
       Zkusit znovu
     </button>

@@ -1,12 +1,8 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ApiError, type FieldErrors, type Note, type NoteInput } from '@/api/notes'
-import { errorMessage } from '@/format'
+import { ApiError, errorMessage, type FieldErrors, type Note, type NoteInput } from '@/api/notes'
 
-/**
- * Shared submit flow of the create and edit forms: field errors from the API go
- * next to the fields, anything else is shown above the form.
- */
+/** Submit flow shared by the create and edit views. */
 export function useNoteSave(save: (input: NoteInput) => Promise<Note>, successMessage: string) {
   const router = useRouter()
   const submitting = ref(false)
@@ -20,16 +16,17 @@ export function useNoteSave(save: (input: NoteInput) => Promise<Note>, successMe
 
     try {
       await save(input)
-      await router.push({ name: 'notes', state: { flash: successMessage } })
     } catch (error) {
+      formError.value = errorMessage(error)
       if (error instanceof ApiError && error.code === 'validation_failed') {
         fieldErrors.value = error.fields
-      } else {
-        formError.value = errorMessage(error)
       }
+      return
     } finally {
       submitting.value = false
     }
+
+    await router.push({ name: 'notes', state: { flash: successMessage } })
   }
 
   return { submitting, fieldErrors, formError, submit }

@@ -4,10 +4,14 @@
   --text: #1f2933;
   --muted: #5f6b7a;
   --border: #dde2e8;
+  --border-strong: #c3cad3;
+  --hover-bg: #f0f2f5;
+  --on-accent: #ffffff;
   --accent: #0f766e;
   --accent-hover: #0b5f58;
   --danger: #b42318;
   --danger-bg: #fef3f2;
+  --danger-border: #f4c7c3;
   --success-bg: #ecfdf3;
   --success: #067647;
   --focus: #2563eb;
@@ -52,6 +56,11 @@ a {
   outline-offset: 2px;
 }
 
+/* Headings get focus programmatically, e.g. after a delete. */
+[tabindex='-1']:focus {
+  outline: none;
+}
+
 .container {
   max-width: 760px;
   margin: 0 auto;
@@ -72,6 +81,9 @@ main.container {
   position: absolute;
   width: 1px;
   height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
@@ -115,8 +127,8 @@ main.container {
 }
 
 .button:hover {
-  border-color: #c3cad3;
-  background: #f0f2f5;
+  border-color: var(--border-strong);
+  background: var(--hover-bg);
 }
 
 .button:disabled {
@@ -127,7 +139,7 @@ main.container {
 .button--primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .button--primary:hover {
@@ -141,7 +153,7 @@ main.container {
 
 .button--danger:hover {
   background: var(--danger-bg);
-  border-color: #f4c7c3;
+  border-color: var(--danger-border);
 }
 
 .button--small {
@@ -229,7 +241,7 @@ main.container {
 .note-card__content {
   margin: 8px 0 0;
   color: var(--muted);
-  white-space: pre-line;
+  white-space: pre-wrap;
   overflow-wrap: anywhere;
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -278,7 +290,6 @@ main.container {
 /* Segmented control (filter and priority picker) */
 .segmented {
   display: inline-flex;
-  flex-wrap: wrap;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
@@ -301,13 +312,17 @@ main.container {
 }
 
 .segmented__item:hover {
-  background: #f0f2f5;
+  background: var(--hover-bg);
+}
+
+.segmented__item:focus-visible {
+  outline-offset: -2px;
 }
 
 .segmented__item[aria-pressed='true'],
-.segmented__item.is-selected {
+.segmented__item:has(input:checked) {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .segmented__item:has(input:focus-visible) {

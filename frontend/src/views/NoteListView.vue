@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ApiError, deleteNote, isPriority, listNotes, type Note, type Priority } from '@/api/notes'
+import { ApiError, deleteNote, errorMessage, isPriority, listNotes, type Note, type Priority } from '@/api/notes'
 import NoteCard from '@/components/NoteCard.vue'
 import PriorityFilter from '@/components/PriorityFilter.vue'
-import { errorMessage, pluralizeNotes } from '@/format'
+import { pluralizeNotes } from '@/format'
 import { PRIORITY_LABELS } from '@/priority'
 
 const route = useRoute()
 const router = useRouter()
+const heading = useTemplateRef<HTMLHeadingElement>('heading')
 
 const notes = ref<Note[]>([])
 const status = ref<'loading' | 'ready' | 'error'>('loading')
@@ -17,7 +18,7 @@ const actionError = ref<string | null>(null)
 const flash = ref<string | null>(null)
 const deletingId = ref<number | null>(null)
 
-// The filter lives in the URL (?priority=high), so a filtered list can be bookmarked or shared.
+// The filter lives in the URL, so it can be bookmarked and shared.
 const priority = computed<Priority | null>({
   get: () => (isPriority(route.query.priority) ? route.query.priority : null),
   set: (value) => void router.replace({ query: value ? { priority: value } : {} }),
@@ -26,18 +27,17 @@ const priority = computed<Priority | null>({
 let controller: AbortController | null = null
 
 async function load(): Promise<void> {
-  // A slower response for a previous filter must not overwrite the current one.
+  // Cancel the previous request so a stale response cannot win.
   controller?.abort()
   controller = new AbortController()
+  const { signal } = controller
 
   status.value = 'loading'
   try {
-    notes.value = await listNotes(priority.value, controller.signal)
+    notes.value = await listNotes(priority.value, signal)
     status.value = 'ready'
   } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') {
-      return
-    }
+    if (signal.aborted) return
     loadError.value = errorMessage(error)
     status.value = 'error'
   }
@@ -50,10 +50,11 @@ async function remove(note: Note): Promise<void> {
 
   deletingId.value = note.id
   actionError.value = null
+  flash.value = null
   try {
     await deleteNote(note.id)
   } catch (error) {
-    // Already deleted elsewhere: the goal is reached, just drop it from the list.
+    // 404: already gone, treat it as deleted.
     if (!(error instanceof ApiError && error.status === 404)) {
       actionError.value = `Poznámku se nepodařilo smazat. ${errorMessage(error)}`
       return
@@ -61,45 +62,57 @@ async function remove(note: Note): Promise<void> {
   } finally {
     deletingId.value = null
   }
+
   flash.value = 'Poznámka byla smazána.'
-  // A list request started before the delete could still bring the note back; reload instead.
+  // An in-flight list request may still contain the note.
   if (status.value === 'loading') {
     void load()
   } else {
     notes.value = notes.value.filter((item) => item.id !== note.id)
   }
+  await nextTick()
+  heading.value?.focus()
 }
 
-watch(priority, load, { immediate: true })
+watch(priority, () => {
+  flash.value = null
+  actionError.value = null
+  void load()
+})
 
 onMounted(() => {
+  void load()
+
   const state = window.history.state as { flash?: unknown } | null
   if (typeof state?.flash === 'string') {
     flash.value = state.flash
-    // Do not show the message again after a reload.
+    // Show the message only once, not again after a reload.
     window.history.replaceState({ ...state, flash: undefined }, '')
   }
-
-  // Normalize an unknown filter value in the URL instead of silently ignoring it.
-  if (route.query.priority !== undefined && priority.value === null) {
-    void router.replace({ query: {} })
-  }
 })
+
+onBeforeUnmount(() => controller?.abort())
 </script>
 
 <template>
   <div class="toolbar">
-    <h1>Moje poznámky</h1>
+    <h1
+      ref="heading"
+      tabindex="-1"
+    >
+      Moje poznámky
+    </h1>
     <PriorityFilter v-model="priority" />
   </div>
 
-  <p
-    v-if="flash"
-    class="alert alert--success"
-    role="status"
-  >
-    {{ flash }}
-  </p>
+  <div role="status">
+    <p
+      v-if="flash"
+      class="alert alert--success"
+    >
+      {{ flash }}
+    </p>
+  </div>
   <p
     v-if="actionError"
     class="alert alert--error"
@@ -109,7 +122,7 @@ onMounted(() => {
   </p>
 
   <p
-    v-if="status === 'loading'"
+    v-if="status === 'loading' && notes.length === 0"
     class="muted"
     aria-live="polite"
   >
@@ -132,7 +145,7 @@ onMounted(() => {
   </div>
 
   <div
-    v-else-if="notes.length === 0"
+    v-else-if="status === 'ready' && notes.length === 0"
     class="card state"
   >
     <template v-if="priority">
@@ -156,11 +169,14 @@ onMounted(() => {
     </template>
   </div>
 
-  <template v-else>
+  <template v-else-if="notes.length > 0">
     <p class="muted">
-      {{ pluralizeNotes(notes.length) }}, řazeno podle priority a poslední změny
+      {{ pluralizeNotes(notes.length) }}, seřazeno podle priority a poslední změny
     </p>
-    <ul class="note-list">
+    <ul
+      class="note-list"
+      :aria-busy="status === 'loading'"
+    >
       <li
         v-for="note in notes"
         :key="note.id"

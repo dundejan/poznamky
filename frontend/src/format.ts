@@ -10,7 +10,3 @@ export function pluralizeNotes(count: number): string {
   if (count >= 2 && count <= 4) return `${count} poznámky`
   return `${count} poznámek`
 }
-
-export function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'Něco se nepovedlo.'
-}

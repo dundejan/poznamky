@@ -19,7 +19,7 @@ export interface NoteInput {
 
 export type FieldErrors = Partial<Record<string, string[]>>
 
-/** Error returned by the API ({"error": {...}}) or a network failure (status 0). */
+/** API error response, or a network failure (status 0). */
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -36,14 +36,23 @@ export function isPriority(value: unknown): value is Priority {
   return typeof value === 'string' && (PRIORITIES as readonly string[]).includes(value)
 }
 
+/** User-facing message; unexpected errors are logged, not shown. */
+export function errorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    return error.message
+  }
+  console.error(error)
+  return 'Něco se nepovedlo. Zkuste to prosím znovu.'
+}
+
 export async function listNotes(priority: Priority | null, signal?: AbortSignal): Promise<Note[]> {
   const query = priority ? `?priority=${priority}` : ''
   const body = await request<{ data: Note[] }>(`/notes${query}`, { signal })
   return body.data
 }
 
-export function getNote(id: number): Promise<Note> {
-  return request<Note>(`/notes/${id}`)
+export function getNote(id: number, signal?: AbortSignal): Promise<Note> {
+  return request<Note>(`/notes/${id}`, { signal })
 }
 
 export function createNote(input: NoteInput): Promise<Note> {
@@ -68,16 +77,28 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   try {
     response = await fetch(`/api${path}`, { ...init, headers })
   } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') {
+    if (init.signal?.aborted) {
       throw error
     }
     throw new ApiError(0, 'network_error', 'Server je nedostupný. Zkontrolujte připojení a zkuste to znovu.')
   }
 
-  const body: unknown = response.status === 204 ? null : await response.json().catch(() => null)
+  if (response.status === 204) {
+    return null as T
+  }
+
+  const body: unknown = await response.json().catch((error: unknown) => {
+    if (init.signal?.aborted) {
+      throw error
+    }
+    return null
+  })
 
   if (!response.ok) {
     throw toApiError(response.status, body)
+  }
+  if (body === null) {
+    throw unexpectedResponse(response.status)
   }
 
   return body as T
@@ -86,10 +107,14 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 function toApiError(status: number, body: unknown): ApiError {
   const error = (body as { error?: { code?: string; message?: string; fields?: FieldErrors } } | null)?.error
 
-  // A response without our JSON shape, e.g. 502 from the proxy while PHP is starting.
+  // Not our error shape, e.g. a proxy 502 while PHP starts.
   if (!error?.code || !error.message) {
-    return new ApiError(status, 'unexpected_response', 'Server odpověděl neočekávaně. Zkuste to prosím znovu.')
+    return unexpectedResponse(status)
   }
 
   return new ApiError(status, error.code, error.message, error.fields ?? {})
+}
+
+function unexpectedResponse(status: number): ApiError {
+  return new ApiError(status, 'unexpected_response', 'Server odpověděl neočekávaně. Zkuste to prosím znovu.')
 }
