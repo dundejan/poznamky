@@ -1,8 +1,10 @@
 # Poznámky
 
-Jednoduchá aplikace na správu poznámek. Poznámka má název, obsah a prioritu (nízká, střední, vysoká). Poznámky jde vytvářet, upravovat, mazat a filtrovat podle priority.
+## Co to je
 
-Backend je REST API v PHP (Symfony), data jsou v MariaDB, frontend je ve Vue 3. Celé se to spouští přes Docker Compose.
+Jednoduchá aplikace na správu poznámek s názvem, obsahem a prioritou (nízká, střední, vysoká). Poznámky lze vytvářet, upravovat a filtrovat podle priority; mazání je navíc nad rámec zadání. Backend je REST API v PHP a Symfony nad MariaDB, frontend je ve Vue 3 a celá aplikace se spouští jedním příkazem přes Docker Compose.
+
+![Seznam poznámek](docs/screenshot.png)
 
 | Část | Technologie | Verze |
 | --- | --- | --- |
@@ -33,12 +35,12 @@ Užitečné příkazy:
 docker compose up --build                     # po změně kódu (obrazy se sestaví znovu)
 docker compose down -v                        # zastavit a smazat databázi (příště se nahrají demo data)
 
-docker compose exec php composer test         # PHPUnit, funkční testy API proti testovací DB
-docker compose exec php composer check        # CS-Fixer, PHPStan a testy, to samé co CI
-docker compose exec php bin/console app:demo-data   # demo data ručně (jen do prázdné DB)
+docker compose exec php composer test         # PHPUnit: funkční testy API proti testovací DB
+docker compose exec php composer check        # CS-Fixer, PHPStan a testy, stejně jako backendový job v CI
+docker compose exec php bin/console app:load-demo-data   # demo data ručně (jen do prázdné DB)
 ```
 
-Frontend (potřebuje Node 24):
+Kontroly frontendu mimo Docker (vyžadují Node 24):
 
 ```bash
 cd frontend
@@ -51,16 +53,16 @@ npm run dev           # vývojový server na http://localhost:5173, /api posíl�
 
 ## Přehled API
 
-Všechny odpovědi jsou JSON. Tělo požadavku musí mít `Content-Type: application/json`.
+Odpovědi s tělem jsou v JSON. Tělo požadavku musí mít `Content-Type: application/json`.
 
 | Metoda | Adresa | Popis | Úspěch |
 | --- | --- | --- | --- |
-| `GET` | `/api/notes` | Seznam poznámek, řazený podle priority a poslední změny | 200 |
+| `GET` | `/api/notes` | Seznam poznámek, seřazený podle priority a poslední změny | 200 |
 | `GET` | `/api/notes?priority=high` | Seznam filtrovaný podle priority (`low`, `medium`, `high`) | 200 |
 | `GET` | `/api/notes/{id}` | Detail poznámky | 200 |
 | `POST` | `/api/notes` | Vytvoření poznámky | 201 + hlavička `Location` |
 | `PUT` | `/api/notes/{id}` | Úprava poznámky (nahradí celý obsah) | 200 |
-| `DELETE` | `/api/notes/{id}` | Smazání poznámky (nad rámec zadání) | 204 |
+| `DELETE` | `/api/notes/{id}` | Smazání poznámky (nad rámec zadání) | 204 bez těla |
 
 Pole v těle požadavku:
 
@@ -70,7 +72,7 @@ Pole v těle požadavku:
 | `content` | ne | text, nejvýše 10 000 znaků, výchozí hodnota `""` |
 | `priority` | ano | `low`, `medium` nebo `high` |
 
-Příklad vytvoření:
+Příklad vytvoření (příklady používají `jq` pro čitelný výstup):
 
 ```bash
 curl -s -X POST http://localhost:8080/api/notes \
@@ -93,7 +95,7 @@ Seznam vrací poznámky v obálce `{"data": [...]}`, aby šlo později přidat s
 
 ### Chyby
 
-Každá chyba pod `/api` má stejný tvar. Pole `fields` je jen u chyb validace a jde rovnou navázat na formulář.
+Každá chyba pod `/api` má stejný tvar, včetně chyb, které vrací nginx (příliš velký požadavek, nedostupné PHP). Pole `fields` je jen u chyb validace a frontend ho přímo napojí na formulář.
 
 ```bash
 curl -s -X POST http://localhost:8080/api/notes \
@@ -116,89 +118,93 @@ curl -s -X POST http://localhost:8080/api/notes \
 
 | Stav | `code` | Kdy |
 | --- | --- | --- |
-| 400 | `invalid_json` | Tělo není platný JSON |
+| 400 | `invalid_json` | Tělo není platný JSON nebo chybí |
 | 400 | `validation_failed` | Neplatná hodnota filtru `?priority=` |
 | 404 | `not_found` | Poznámka neexistuje (i pro nečíselné id) |
-| 405 | `method_not_allowed` | Nepodporovaná metoda, např. `PATCH`; hlavička `Allow` říká, které jsou povolené |
+| 405 | `method_not_allowed` | Nepodporovaná metoda, např. `PATCH`; hlavička `Allow` uvádí povolené |
+| 413 | `payload_too_large` | Tělo je větší než 1 MB |
 | 415 | `unsupported_media_type` | Tělo není JSON (chybí `Content-Type: application/json`) |
 | 422 | `validation_failed` | Neplatná pole v těle, detail v `fields` |
 | 500 | `internal_error` | Neočekávaná chyba; podrobnosti jsou jen v logu (`docker compose logs php`) |
+| 503 | `service_unavailable` | PHP neběží nebo ještě startuje |
+
+## Klíčové designové volby
+
+**Symfony 7.4 LTS a PHP 8.5.** Symfony je rozšířený PHP framework s LTS verzemi a odpovídá stacku týmu. Řada 7.4 má opravy chyb do 11/2028 a bezpečnostní opravy do 11/2029; novější 8.1 má podporu jen do 01/2027. PHP 8.5 je nejnovější stabilní verze, MariaDB 12.3 aktuální LTS.
+
+**Vrstvy bez zbytečných abstrakcí.** Controller jen převede HTTP na DTO a zpět. Zápisy dělá `NoteService`. Pravidla poznámky samotné (ořez a délka názvu, kdy se mění `updatedAt`) hlídá entita. Čtení jde z controlleru rovnou do repozitáře, protože služba by volání jen přeposílala. Nejsou tu rozhraní pro jedinou implementaci ani vlastní vrstvy nad Doctrine.
+
+**DTO a Symfony Validator.** `NoteInput` odděluje kontrakt API od entity, takže se API a schéma DB můžou měnit nezávisle. Do entity se dostanou jen data, která prošla validací; entita navíc odmítne neplatný stav i při použití mimo API. Tělo mapuje `#[MapRequestPayload]`, controller je proto krátký. Hlášky jsou česky přímo u pravidel, protože je UI ukazuje uživateli. Výstup určuje `NoteResponse`, ne serializace entity.
+
+**PUT místo PATCH.** Formulář vždy posílá celou poznámku, a to přesně odpovídá PUT (nahrazení celého zdroje). Vytvoření i úprava sdílejí jedno DTO a stejnou validaci. PUT je idempotentní, opakované odeslání je bezpečné. PATCH by musel rozlišovat chybějící pole od `null`; smysl dává až pro dílčí změny, třeba rychlou změnu priority ze seznamu.
+
+**Jednotný formát chyb.** Jeden listener převádí všechny výjimky pod `/api` na stejný JSON. 422 znamená neplatná pole v těle, 400 nečitelný požadavek nebo neplatný parametr v URL. Zvažoval jsem RFC 9457 (Problem Details). Vlastní tvar je pro frontend jednodušší, protože `fields` přímo odpovídá polím formuláře. Přechod na RFC 9457 by znamenal změnu listeneru a funkce `toApiError` na frontendu.
+
+**Řazení: priorita, pak poslední změna.** Nahoře jsou nejdůležitější a naposledy upravené poznámky. Priorita je v DB jako text, abecední řazení by proto bylo špatně; repozitář řadí přes `CASE` sestavený z `Priority::sortRank()`. Při shodě rozhoduje `id`, takže pořadí je stabilní. U filtrovaného seznamu se `CASE` vynechá a řazení obslouží index `(priority, updated_at)` bez třídění v paměti (ověřeno přes `EXPLAIN`).
+
+**Čas přes Clock.** Služba bere čas z `ClockInterface`, ne z `new DateTime()`. V testech je čas pevný, takže testy řazení jsou deterministické. V DB je vše v UTC, API vrací ISO 8601 s posunem a prohlížeč zobrazí místní čas.
+
+**Docker.** Tři služby: `db` (MariaDB), `php` (PHP-FPM) a `web` (nginx). Nginx servíruje sestavený frontend a `/api` předává PHP, takže UI i API běží na jedné adrese a není potřeba CORS. Node je jen v build stupni. PHP obraz má cíl `dev` (s dev závislostmi kvůli testům) a `prod` (bez nich, s OPcache preloadem); CI sestavuje oba. Žádný kontejner aplikace neběží pod rootem. Migrace a demo data spouští entrypoint PHP kontejneru; při více instancích by migrace byly samostatný krok nasazení. Služby čekají na healthcheck svých závislostí. Úpravy MariaDB a nginx jsou okomentované přímo v `compose.yaml` a `docker/`.
+
+**Testy.** Funkční testy volají API přes HTTP kernel proti skutečné MariaDB, ne proti SQLite, aby ověřily stejné SQL jako produkce. Každý test běží v transakci, která se na konci vrátí (DAMA DoctrineTestBundle), takže jsou rychlé a nezávislé. Pokrývají řazení, filtr, validaci, chyby, 404 a příkaz na demo data. PHPStan běží na nejvyšší úrovni s rozšířeními pro Symfony a Doctrine. CI spouští stejný Compose stack jako lokálně.
+
+**Frontend.** Vue 3 s Composition API a TypeScriptem. Stav je lokální ve view, globální store (Pinia) by tu nic nepřinesl. Klient API je malý typovaný modul nad `fetch` a chyby převádí na `ApiError`. Filtr je v URL (`/?priority=high`), takže ho lze sdílet a přežije obnovení stránky. Závazná pravidla validace jsou jen na backendu; UI chyby zobrazí u polí a počítadlo znaků jen upozorní předem. Frontend nemá unit testy, UI jsem ověřoval ručním průchodem v Playwrightu (viz Další vývoj).
+
+## Ošetřené okrajové případy
+
+- **Prázdný název nebo jen mezery:** 422, název se před validací i uložením ořízne.
+- **Příliš dlouhý text:** limity 200 a 10 000 znaků se počítají ve znacích, ne v bajtech; čeština i emoji se počítají správně (pokryto testem).
+- **Chybějící priorita:** 422 „Vyberte prioritu.“ **Neplatná priorita:** 422 se seznamem povolených hodnot.
+- **Špatný typ hodnoty**, např. `"title": 42`: 422 u daného pole.
+- **Nevalidní nebo prázdné tělo:** 400 `invalid_json`. Formulářová data místo JSON: 415. Tělo nad 1 MB: 413.
+- **Neznámá pole v těle** se ignorují, aby starší klient nepřestal fungovat po přidání pole.
+- **Neexistující poznámka nebo nečíselné id:** 404 v JSON, i u `PUT` a `DELETE`.
+- **Neplatný filtr** `?priority=urgent` nebo prázdný `?priority=`: API vrací 400, UI neplatnou hodnotu z URL odstraní.
+- **Uložení beze změny:** neposune `updatedAt`, pořadí v seznamu se nezmění.
+- **Rychlé přepínání filtru:** starší požadavek se zruší (`AbortController`), pomalejší odpověď nepřepíše novější.
+- **Smazání během načítání seznamu:** seznam se po smazání načte znovu, starší odpověď tak smazanou poznámku nevrátí.
+- **Smazání poznámky, kterou už smazal někdo jiný:** UI ji jen odebere ze seznamu, výsledek je stejný.
+- **Úprava neexistující poznámky v UI:** stav „poznámka neexistuje“ s odkazem zpět.
+- **Výpadek API nebo sítě:** chybový stav s tlačítkem „Zkusit znovu“. Neočekávané chyby UI neukazuje surově, zobrazí obecnou hlášku.
+- **HTML v obsahu:** Vue text vždy escapuje a `v-html` se nepoužívá, XSS přes obsah poznámky proto není možné.
+- **Dvojí odeslání formuláře:** tlačítko je během ukládání zablokované.
+- **Opakovaný start kontejneru:** demo data se nahrají jen do prázdné databáze. Po smazání všech poznámek a restartu se vrátí; vypnout to lze přes `LOAD_DEMO_DATA: "0"` v `compose.yaml`.
+
+## Další vývoj
+
+- **Uživatelé a oprávnění.** Přihlášení (session nebo tokeny), sloupec `owner_id` a všechny dotazy omezené na vlastníka. Cizí poznámka by vracela 404, ne 403, aby nešlo zjistit, že existuje. To je první krok před nasazením pro více uživatelů.
+- **Souběžné úpravy.** Teď vyhrává poslední uložení. Přidal bych verzi poznámky (Doctrine `#[ORM\Version]`), `ETag` v odpovědi a `If-Match` u `PUT`. Při konfliktu by API vrátilo 412 a UI nabídlo porovnání změn.
+- **Stránkování a hledání.** Seznam teď vrací všechno. Při větším počtu poznámek bych přidal kurzorové stránkování (stabilní i při změnách) a fulltextové hledání v názvu a obsahu.
+- **Archivace místo mazání.** Smazání je nevratné. Archiv nebo koš s obnovením, případně „Zpět“ hned po smazání, chrání před omylem.
+- **Štítky.** Vazba M:N a filtr podle štítků. Priorita určuje pořadí, štítky dělí poznámky podle témat.
+- **Markdown v obsahu.** Ukládat zdrojový text a vykreslovat ho na frontendu knihovnou, která HTML sanitizuje.
+- **Rychlé akce.** Změna priority přímo ze seznamu přes `PATCH` (JSON Merge Patch) a upozornění na neuložené změny při odchodu z formuláře.
+- **Dokumentace API.** OpenAPI generované z DTO (NelmioApiDocBundle), aby se dokumentace nerozcházela s kódem; z ní by šly generovat i typy pro frontend.
+- **Testy frontendu.** Vitest pro klienta API a skládání formuláře, E2E testy UI (Playwright) v CI proti Compose stacku.
+- **Provoz.** Migrace jako samostatný krok nasazení, secrets mimo repozitář, TLS k databázi, strukturované logy a monitoring.
 
 ## Struktura projektu
 
 ```
 backend/
-  src/Controller/NoteController.php        HTTP vrstva: mapuje požadavek na DTO a volá službu
-  src/Dto/NoteInput.php                    vstup pro POST a PUT, pravidla validace
-  src/Dto/NoteListQuery.php                filtr seznamu (?priority=)
-  src/Dto/NoteResponse.php                 tvar poznámky v API
-  src/Service/NoteService.php              zápisy: vytvoření, úprava, smazání
-  src/Entity/Note.php                      entita a její pravidla (ořez názvu, časy změn)
-  src/Enum/Priority.php                    backed enum priority a její pořadí
-  src/Repository/NoteRepository.php        dotaz na seznam s řazením a filtrem
+  src/Controller/NoteController.php            HTTP vrstva: mapuje požadavek na DTO a volá službu
+  src/Dto/NoteInput.php                        vstup pro POST a PUT, pravidla validace
+  src/Dto/NoteListQuery.php                    filtr seznamu (?priority=)
+  src/Dto/NoteResponse.php                     tvar poznámky v API
+  src/Service/NoteService.php                  zápisy: vytvoření, úprava, smazání
+  src/Entity/Note.php                          entita a její pravidla (název, obsah, časy změn)
+  src/Enum/Priority.php                        backed enum priority a její pořadí
+  src/Repository/NoteRepository.php            dotaz na seznam s řazením a filtrem
   src/EventListener/ApiExceptionListener.php   jednotný JSON pro všechny chyby
-  src/Command/LoadDemoDataCommand.php      demo data
-  migrations/                              Doctrine migrace
-  tests/Api/NoteApiTest.php                funkční testy API
+  src/Command/LoadDemoDataCommand.php          demo data
+  migrations/                                  Doctrine migrace
+  tests/                                       funkční testy API a test příkazu
 frontend/src/
-  api/notes.ts                             typovaný klient API a třída ApiError
-  views/                                   seznam, vytvoření, úprava, 404
-  components/                              formulář, karta poznámky, filtr, štítek priority
-  composables/useNoteSave.ts               společné odeslání formuláře a zobrazení chyb
-docker/                                    Dockerfile pro PHP a web, nginx, init SQL
+  api/notes.ts                                 typovaný klient API a třída ApiError
+  views/                                       seznam, vytvoření, úprava, 404
+  components/                                  formulář, karta poznámky, filtr, štítek priority
+  composables/useNoteSave.ts                   společné odeslání formuláře a zobrazení chyb
+docker/                                        Dockerfile pro PHP a web, nginx, init SQL
 compose.yaml
 .github/workflows/ci.yml
 ```
-
-## Klíčové designové volby
-
-**Symfony 7.4 LTS a PHP 8.5.** Symfony je standard pro PHP API a odpovídá stacku firmy. Volím LTS řadu: opravy chyb do 11/2028, bezpečnostní do 11/2029. Novější Symfony 8.1 má podporu jen do 01/2027. PHP 8.5 je nejnovější stabilní verze. MariaDB 12.3 je aktuální LTS.
-
-**Vrstvy bez zbytečných abstrakcí.** Controller jen převede HTTP na DTO a zpět. Zápisy dělá `NoteService`. Pravidla, která patří k poznámce samotné (ořez názvu, kdy se mění `updatedAt`), jsou v entitě. Čtení jde z controlleru rovnou do repozitáře; služba by tu jen přeposílala volání. Nejsou tu rozhraní pro jednu implementaci ani vlastní repozitářové vrstvy nad Doctrine.
-
-**DTO a Symfony Validator.** `NoteInput` odděluje kontrakt API od entity. Entita tak nikdy není v nevalidním stavu a API se může měnit nezávisle na databázi. Mapování těla dělá `#[MapRequestPayload]`, takže controller je krátký. Chybové hlášky jsou česky přímo u pravidel, protože je UI ukazuje uživateli. Výstup řídí `NoteResponse`, ne serializace entity.
-
-**PUT místo PATCH.** Formulář vždy posílá celou poznámku, takže PUT (nahrazení celého zdroje) přesně odpovídá použití. Vytvoření i úprava sdílí jedno DTO a stejnou validaci. PUT je idempotentní, opakované odeslání nic nerozbije. PATCH by musel rozlišovat chybějící pole od `null` a dává smysl až pro dílčí změny, například rychlou změnu priority ze seznamu.
-
-**Jednotný formát chyb.** Jeden listener převádí všechny výjimky pod `/api` na stejný JSON. 422 znamená neplatná pole, 400 nečitelný požadavek. Zvažoval jsem RFC 9457 (Problem Details). Vlastní tvar je pro frontend jednodušší, protože `fields` jde rovnou navázat na formulář. Přechod na RFC 9457 by byl jen změna listeneru.
-
-**Řazení: priorita, pak poslední změna.** Nejdůležitější a nejčerstvější poznámky jsou nahoře. Priorita je v DB jako čitelný text (`high`), abecední řazení by tedy bylo špatně. Repozitář proto řadí přes `CASE` sestavený z enumu, pořadí je definované na jednom místě (`Priority::sortRank()`). Při shodě rozhoduje `id`, aby pořadí bylo stabilní. U filtrovaného seznamu je priorita stejná, `CASE` se vynechá a index `(priority, updated_at)` obslouží filtr i řazení bez třídění v paměti (ověřeno přes `EXPLAIN`). Uložení beze změny neposouvá `updatedAt`, takže poznámka zbytečně neskočí nahoru.
-
-**Čas přes Clock.** Služba bere čas z `ClockInterface`, ne z `new DateTime()`. V testech je čas pevný, takže testy řazení jsou deterministické. V DB je všechno v UTC, API vrací ISO 8601 s posunem a prohlížeč zobrazí místní čas.
-
-**Docker.** Tři služby: `db` (MariaDB), `php` (PHP-FPM) a `web` (nginx). Nginx servíruje sestavený frontend a `/api` posílá do PHP. UI i API jsou na stejné adrese, takže není potřeba CORS. Obrazy jsou vícestupňové: Node je jen v build stupni. PHP image má cíl `dev` (s dev závislostmi, aby šly pustit testy přímo v kontejneru) a `prod` (bez nich, optimalizovaný autoloader); CI sestavuje oba. Aplikace v kontejneru neběží pod rootem; produkční obraz bez `APP_SECRET` odmítne nastartovat. Nginx překládá adresu PHP kontejneru při každém požadavku, takže restart PHP nerozbije API. Služby mají healthchecky a startují ve správném pořadí: web čeká na PHP, PHP na databázi. Nginx posílá bezpečnostní hlavičky včetně Content-Security-Policy. Migrace se spouští v entrypointu PHP kontejneru; při více instancích by to byl samostatný krok nasazení. Dvě úpravy MariaDB: healthcheck se přihlašuje aplikačním uživatelem přes TCP (projde až po dokončení inicializace) a TLS je na interní síti vypnuté (`--skip-ssl`), protože certifikát generovaný při startu občas shodil první inicializaci.
-
-**Testy.** Funkční testy volají API přes HTTP kernel proti skutečné MariaDB, ne proti SQLite, aby testovaly stejné SQL jako produkce. Každý test běží v transakci, která se na konci vrátí (DAMA DoctrineTestBundle), takže jsou rychlé a nezávislé. Testy pokrývají řazení, filtr, validaci, chyby a 404. PHPStan běží na nejvyšší úrovni včetně rozšíření pro Symfony a Doctrine. CI spouští stejný Compose stack jako lokálně.
-
-**Frontend.** Vue 3 s Composition API a TypeScriptem. Stav je lokální ve view, Pinia by tu nic neřešila. Klient API je malý typovaný modul nad `fetch`, chyby převádí na `ApiError`. Filtr je v URL (`/?priority=high`), takže jde sdílet a přežije obnovení stránky. Pravidla validace jsou jen na backendu (jeden zdroj pravdy), UI zobrazí chyby u polí a počítadlo znaků jen upozorní předem.
-
-## Edge cases, které jsem řešil
-
-- **Prázdný název nebo jen mezery:** 422, název se před validací i uložením ořízne.
-- **Příliš dlouhý text:** limity 200 a 10 000 znaků se počítají ve znacích, ne v bajtech; čeština i emoji se počítají správně (pokryto testem).
-- **Neplatná nebo chybějící priorita:** 422 se seznamem povolených hodnot.
-- **Špatný typ hodnoty**, např. `"title": 42`: 422 u daného pole.
-- **Nevalidní JSON, prázdné tělo:** 400 `invalid_json`. Formulářová data místo JSON: 415.
-- **Neexistující poznámka nebo nečíselné id:** 404 v JSON, i u `PUT` a `DELETE`.
-- **Neplatný filtr** `?priority=urgent`: API vrací 400, UI neplatnou hodnotu z URL tiše odstraní.
-- **Uložení beze změny:** neposune `updatedAt`, pořadí v seznamu se nezmění.
-- **Rychlé přepínání filtru:** starší požadavek se zruší (`AbortController`), pomalejší odpověď nepřepíše novější.
-- **Smazání poznámky, kterou už smazal někdo jiný:** UI ji jen odebere ze seznamu, cíl je splněný.
-- **Úprava neexistující poznámky v UI:** stav „poznámka neexistuje“ s odkazem zpět.
-- **Výpadek API nebo sítě:** chybový stav s tlačítkem „Zkusit znovu“. Odpověď, která není náš JSON (třeba 502 z nginx při startu PHP), dostane obecnou hlášku.
-- **HTML v obsahu:** Vue text vždy escapuje, `v-html` se nepoužívá, takže XSS přes obsah poznámky nejde.
-- **Dvojí odeslání formuláře:** tlačítko je během ukládání zablokované.
-- **Opakovaný start kontejneru:** demo data se nahrají jen do prázdné databáze. Když smažete všechny poznámky a restartujete stack, demo data se vrátí; vypnout to jde přes `LOAD_DEMO_DATA: "0"` v `compose.yaml`.
-- **Smazání během načítání seznamu:** seznam se po smazání načte znovu, takže starší odpověď nevrátí smazanou poznámku zpět.
-
-## Další vývoj
-
-- **Uživatelé a oprávnění.** Přihlášení (session nebo tokeny), sloupec `owner_id` a všechny dotazy omezené na vlastníka. Cizí poznámka by vracela 404, ne 403, aby nešlo zjistit, že existuje. To je první krok před nasazením pro víc lidí.
-- **Souběžné úpravy.** Teď vyhrává poslední uložení. Přidal bych verzi poznámky (Doctrine `#[Version]`), `ETag` v odpovědi a `If-Match` u `PUT`. Při konfliktu by API vrátilo 412 a UI nabídlo porovnání změn.
-- **Stránkování a hledání.** Seznam teď vrací všechno. S rostoucím počtem poznámek kurzorové stránkování (stabilní i při změnách) a fulltextové hledání v názvu a obsahu.
-- **Archivace místo mazání.** Smazání je nevratné. Archiv nebo koš s obnovením, případně „Zpět“ hned po smazání, chrání před omylem.
-- **Štítky.** Vazba M:N a filtr podle štítků. Priorita řadí, štítky třídí podle témat.
-- **Markdown v obsahu.** Uložit zdrojový text, vykreslit na frontendu přes knihovnu se sanitizací HTML.
-- **Rychlé akce.** Změna priority přímo ze seznamu přes `PATCH` (JSON Merge Patch), upozornění na neuložené změny při odchodu z formuláře.
-- **Dokumentace API.** OpenAPI generované z DTO (NelmioApiDocBundle), aby kontrakt a dokumentace nemohly utéct od sebe.
-- **Provoz.** Produkční image už existuje; doplnil bych migrace jako samostatný krok nasazení, secrets mimo repozitář, TLS k databázi, strukturované logy a monitoring, a E2E testy UI (Playwright) v CI.
