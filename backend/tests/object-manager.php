@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-// Lets PHPStan's Doctrine extension read entity metadata (DQL and repository checks).
+// Entity manager for phpstan-doctrine.
 
 use App\Kernel;
 use Symfony\Component\Dotenv\Dotenv;

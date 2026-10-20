@@ -1,6 +1,5 @@
 framework:
+    # Translates Symfony's built-in validator messages (e.g. type errors) to Czech.
     default_locale: cs
     enabled_locales: [cs]
-    translator:
-        default_path: '%kernel.project_dir%/translations'
-        providers:
+    translator: ~
