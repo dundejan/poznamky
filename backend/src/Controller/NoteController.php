@@ -31,7 +31,7 @@ final class NoteController extends AbstractController
         #[MapQueryString(validationFailedStatusCode: Response::HTTP_BAD_REQUEST)]
         NoteListQuery $query = new NoteListQuery(),
     ): JsonResponse {
-        $notes = $this->notes->findForList($query->priority());
+        $notes = $this->notes->findForList($query->toPriority());
 
         return $this->json(['data' => array_map(NoteResponse::fromEntity(...), $notes)]);
     }

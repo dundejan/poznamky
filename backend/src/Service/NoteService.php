@@ -10,7 +10,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Psr\Clock\ClockInterface;
 
 /**
- * Write side of notes. Input is already validated by the controller layer.
+ * Note writes; expects input already validated by the controller.
  */
 final readonly class NoteService
 {
@@ -22,7 +22,7 @@ final readonly class NoteService
 
     public function create(NoteInput $input): Note
     {
-        $note = new Note($input->title, $input->content, $input->priority(), $this->clock->now());
+        $note = new Note($input->title, $input->content, $input->toPriority(), $this->clock->now());
 
         $this->entityManager->persist($note);
         $this->entityManager->flush();
@@ -30,12 +30,10 @@ final readonly class NoteService
         return $note;
     }
 
-    public function update(Note $note, NoteInput $input): Note
+    public function update(Note $note, NoteInput $input): void
     {
-        $note->update($input->title, $input->content, $input->priority(), $this->clock->now());
+        $note->update($input->title, $input->content, $input->toPriority(), $this->clock->now());
         $this->entityManager->flush();
-
-        return $note;
     }
 
     public function delete(Note $note): void

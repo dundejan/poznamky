@@ -15,11 +15,8 @@ use Symfony\Component\Validator\ConstraintViolationListInterface;
 use Symfony\Component\Validator\Exception\ValidationFailedException;
 
 /**
- * Turns every error under /api into one JSON shape:
- * {"error": {"code": "...", "message": "...", "fields": {"title": ["..."]}}}.
- *
- * Runs after Symfony's own listener has logged the exception (priority 0)
- * and before it renders the default error page (priority -128).
+ * Renders every /api error as {"error": {"code", "message", "fields"?}}.
+ * Priority -64: after Symfony logs the exception (0), before its HTML renderer (-128).
  */
 #[AsEventListener(event: KernelEvents::EXCEPTION, priority: -64)]
 final readonly class ApiExceptionListener

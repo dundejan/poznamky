@@ -38,19 +38,20 @@ class Note
 
     public function __construct(string $title, string $content, Priority $priority, \DateTimeImmutable $now)
     {
-        $this->title = trim($title);
-        $this->content = $content;
+        $this->title = self::normalizeTitle($title);
+        $this->content = self::checkContent($content);
         $this->priority = $priority;
         $this->createdAt = $now;
         $this->updatedAt = $now;
     }
 
     /**
-     * Saving an unchanged note keeps its timestamp, so it does not jump to the top of the list.
+     * Unchanged input keeps updatedAt, so the note keeps its place in the list.
      */
     public function update(string $title, string $content, Priority $priority, \DateTimeImmutable $now): void
     {
-        $title = trim($title);
+        $title = self::normalizeTitle($title);
+        $content = self::checkContent($content);
 
         if ($title === $this->title && $content === $this->content && $priority === $this->priority) {
             return;
@@ -90,5 +91,24 @@ class Note
     public function getUpdatedAt(): \DateTimeImmutable
     {
         return $this->updatedAt;
+    }
+
+    private static function normalizeTitle(string $title): string
+    {
+        $title = trim($title);
+        if ('' === $title || mb_strlen($title) > self::TITLE_MAX_LENGTH) {
+            throw new \InvalidArgumentException(sprintf('Note title must have 1 to %d characters.', self::TITLE_MAX_LENGTH));
+        }
+
+        return $title;
+    }
+
+    private static function checkContent(string $content): string
+    {
+        if (mb_strlen($content) > self::CONTENT_MAX_LENGTH) {
+            throw new \InvalidArgumentException(sprintf('Note content must have at most %d characters.', self::CONTENT_MAX_LENGTH));
+        }
+
+        return $content;
     }
 }

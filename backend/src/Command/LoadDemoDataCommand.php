@@ -13,11 +13,11 @@ use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
-#[AsCommand(name: 'app:demo-data', description: 'Loads sample notes into an empty database.')]
+#[AsCommand(name: 'app:load-demo-data', description: 'Loads sample notes into an empty database.')]
 final readonly class LoadDemoDataCommand
 {
     /**
-     * Title, content, priority and age in hours (gives the list a realistic order).
+     * Title, content, priority, hours ago.
      */
     private const array NOTES = [
         ['Objednat se na preventivní prohlídku', "Praktický lékař, poslední prohlídka byla před dvěma lety.\nVolat ráno mezi 7 a 9.", Priority::High, 2],
@@ -49,7 +49,7 @@ final readonly class LoadDemoDataCommand
         }
         $this->entityManager->flush();
 
-        $io->success(sprintf('Loaded %d demo notes.', \count(self::NOTES)));
+        $io->success(sprintf('Loaded %d demo notes.', count(self::NOTES)));
 
         return Command::SUCCESS;
     }

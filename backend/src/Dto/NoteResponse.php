@@ -8,7 +8,7 @@ use App\Entity\Note;
 use App\Enum\Priority;
 
 /**
- * Public JSON shape of a note; keeps the entity out of the API contract.
+ * API representation of a note.
  */
 final readonly class NoteResponse
 {

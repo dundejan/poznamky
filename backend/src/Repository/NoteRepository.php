@@ -32,8 +32,7 @@ class NoteRepository extends ServiceEntityRepository
             $qb->addSelect(sprintf('%s AS HIDDEN priorityRank', self::priorityRankExpression()))
                 ->orderBy('priorityRank', 'ASC');
         } else {
-            // With a single priority the rank is constant; leaving it out lets the
-            // (priority, updated_at) index serve the ORDER BY without a filesort.
+            // One priority means a constant rank; without it the index serves the ORDER BY.
             $qb->andWhere('n.priority = :priority')->setParameter('priority', $priority);
         }
 
@@ -47,8 +46,7 @@ class NoteRepository extends ServiceEntityRepository
     }
 
     /**
-     * Priority is stored as a readable string, so alphabetical order would be wrong.
-     * The ranks come from the enum, which keeps a single source of truth.
+     * Ranks the stored priority strings by Priority::sortRank(); alphabetical order would be wrong.
      */
     private static function priorityRankExpression(): string
     {

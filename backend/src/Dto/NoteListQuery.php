@@ -8,7 +8,7 @@ use App\Enum\Priority;
 use Symfony\Component\Validator\Constraints as Assert;
 
 /**
- * Query string of the note list, e.g. ?priority=high.
+ * Query string of GET /api/notes, e.g. ?priority=high.
  */
 final readonly class NoteListQuery
 {
@@ -21,7 +21,7 @@ final readonly class NoteListQuery
     ) {
     }
 
-    public function priority(): ?Priority
+    public function toPriority(): ?Priority
     {
         return null === $this->priority ? null : Priority::from($this->priority);
     }

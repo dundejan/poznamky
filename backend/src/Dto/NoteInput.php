@@ -9,7 +9,7 @@ use App\Enum\Priority;
 use Symfony\Component\Validator\Constraints as Assert;
 
 /**
- * Request body for creating (POST) and replacing (PUT) a note.
+ * Body of POST and PUT /api/notes.
  */
 final readonly class NoteInput
 {
@@ -39,7 +39,7 @@ final readonly class NoteInput
     ) {
     }
 
-    public function priority(): Priority
+    public function toPriority(): Priority
     {
         return Priority::from($this->priority);
     }
