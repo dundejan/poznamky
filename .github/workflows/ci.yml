@@ -7,40 +7,44 @@ on:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
 
 jobs:
   backend:
-    name: Backend (coding style, PHPStan, tests)
+    name: Stack (CS, PHPStan, tests, smoke test, prod image)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
 
-      # The same stack as `docker compose up` locally, so CI tests what reviewers run.
+      # Same stack reviewers start locally.
       - name: Start the stack
-        run: docker compose up --detach --build --wait
+        run: docker compose up --detach --build --wait --wait-timeout 180
 
       - name: Coding style, static analysis and tests
         run: docker compose exec -T php composer check
 
       - name: Smoke test through nginx
         run: |
-          curl --fail --silent http://localhost:8080/api/notes | grep -q '"data"'
-          curl --fail --silent http://localhost:8080/ | grep -q '<div id="app">'
+          curl -fsS http://localhost:8080/api/notes | grep -q '"data"'
+          curl -fsS http://localhost:8080/ | grep -q '<div id="app">'
 
-      - name: Build the production PHP image
-        run: docker build --target prod --file docker/php/Dockerfile .
+      - name: Build and check the production PHP image
+        run: |
+          docker build --target prod --tag poznamky-php:prod --file docker/php/Dockerfile .
+          docker run --rm -e APP_SECRET=ci poznamky-php:prod bin/console lint:container
 
-      - name: Show logs
+      - name: Show container state and logs
         if: failure()
-        run: docker compose logs
+        run: docker compose ps -a && docker compose logs --no-color
 
   frontend:
     name: Frontend (lint, type check, build)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: frontend

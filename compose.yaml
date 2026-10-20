@@ -9,20 +9,19 @@ services:
       MARIADB_USER: notes
       MARIADB_PASSWORD: notes
       MARIADB_RANDOM_ROOT_PASSWORD: "1"
-    # TLS is off on the private Compose network. The self-signed certificate MariaDB
-    # generates at startup made the first initialization fail now and then.
-    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci", "--skip-ssl"]
+    # No TLS on the private network; MariaDB's auto-generated certificate made the first init flaky.
+    command: ["--skip-ssl"]
     volumes:
       - db-data:/var/lib/mysql
       - ./docker/mariadb/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      # Logs in as the app user over TCP, which only works once initialization has finished.
-      # (The image's healthcheck.sh user failed to log in now and then.)
+      # App user over TCP: passes only once init has finished (the image's healthcheck.sh flaked).
       test: ["CMD-SHELL", "mariadb --skip-ssl -h 127.0.0.1 -u\"$$MARIADB_USER\" -p\"$$MARIADB_PASSWORD\" -e 'SELECT 1' \"$$MARIADB_DATABASE\" > /dev/null"]
-      interval: 3s
+      interval: 30s
       timeout: 5s
-      retries: 30
-      start_period: 10s
+      retries: 3
+      start_period: 60s
+      start_interval: 1s
 
   php:
     build:
@@ -39,26 +38,29 @@ services:
     healthcheck:
       # FPM accepts connections only after the entrypoint has finished migrations.
       test: ["CMD", "php", "-r", "exit(@fsockopen('127.0.0.1', 9000) ? 0 : 1);"]
-      interval: 3s
+      interval: 30s
       timeout: 3s
-      retries: 20
-      start_period: 5s
+      retries: 3
+      start_period: 60s
+      start_interval: 1s
 
   web:
     build:
       context: .
       dockerfile: docker/web/Dockerfile
     ports:
-      - "${APP_PORT:-8080}:80"
+      - "${APP_PORT:-8080}:8080"
     restart: unless-stopped
     depends_on:
       php:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/api/notes"]
-      interval: 5s
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/api/notes"]
+      interval: 30s
       timeout: 3s
-      retries: 20
+      retries: 3
+      start_period: 30s
+      start_interval: 1s
 
 volumes:
   db-data:
